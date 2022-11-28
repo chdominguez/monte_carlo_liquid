@@ -83,6 +83,7 @@ Which in this program is implemented as follows:
 $$
 g\left(r_i\right)=\frac{N_i}{N_{\text {accum }} \times N / 2 \times 4 \pi\left(\left(r_i+\Delta r\right)^3-r_i^3\right) \rho}
 $$
+
 Where $N_i$ is the number of times a given distance between a pair of atoms happens during the simulation, $N_{accum}$ the number of times the list of distances has been updated, $N$ the total number of atoms, $r_i$ the given distance, $\Delta r$ the discretization of the distances and $\rho$ the density.
 
 ## Neighbour lists
