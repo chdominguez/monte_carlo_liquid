@@ -32,24 +32,24 @@ Periodic boundary conditions can easily be implemented in code following these e
 
 $$
 \begin{gathered}
-\mathbf{r}_{i j}=\mathbf{r}_j-\mathbf{r}_i=\left\{\begin{array}{c}
+\mathbf{r}_{i j}=\mathbf{r}_j-\mathbf{r}_i=\left\lbrace\begin{array}{c}
 \Delta x_{i j} \\
 \Delta y_{i j} \\
 \Delta z_{i j}
-\end{array}\right\}=\left\{\begin{array}{c}
+\end{array}\right\rbrace=\left\lbrace\begin{array}{c}
 x_j-x_i \\
 y_j-y_i \\
 z_j-z_i
-\end{array}\right\} \\
-\mathbf{r}_{i j}^{\mathrm{MI}}=\left(\mathbf{r}_j-\mathbf{r}_i\right)^{\mathrm{MI}}=\left\{\begin{array}{c}
+\end{array}\right\rbrace \\
+\mathbf{r}_{i j}^{\mathrm{MI}}=\left(\mathbf{r}_j-\mathbf{r}_i\right)^{\mathrm{MI}}=\left\lbrace\begin{array}{c}
 \Delta x_{i j}^{\mathrm{MI}} \\
 \Delta y_{i j}^{\mathrm{MI}} \\
 \Delta z_{i j}^{\mathrm{MI}}
-\end{array}\right\}=\left\{\begin{array}{c}
+\end{array}\right\rbrace=\left\lbrace\begin{array}{c}
 x_j-x_i+n_x L \\
 y_j-y_i+n_y L \\
 z_j-z_i+n_z L
-\end{array}\right\}
+\end{array}\right\rbrace
 \end{gathered}
 $$
 
@@ -61,11 +61,14 @@ This software utilitzes twoclassical methods for accounting the potential energy
 
 ### Lennard-Jones Fluid
 This potential is aimed to simulate liquids comprised of rare gas atoms such as argon. Its the first type implemented in the software.
+
 $$
-V_{i j}^{\mathrm{LJ}}=4 \epsilon\left\{\left(\frac{\sigma}{r_{i j}}\right)^{12}-\left(\frac{\sigma}{r_{i j}}\right)^6\right\}
+V_{i j}^{\mathrm{LJ}}=4 \epsilon\left\lbrace\left(\frac{\sigma}{r_{i j}}\right)^{12}-\left(\frac{\sigma}{r_{i j}}\right)^6\right\rbrace
 $$
+
 ### The Stillinger Model
 This potential is aimed to model liquid silicon, the second type of simulation implemented in this software.
+
 $$
 V^{\text {Stillinger }}=V_2+V_3=\epsilon \sum_{i=1}^{N-1} \sum_{j=i+1}^N f_2\left(\frac{r_{i j}}{\sigma}\right)+\epsilon \sum_{i=1}^{N-2} \sum_{j=i+1}^{N-1} \sum_{k=j+1}^N f_3\left(\frac{\mathbf{r}_{i j}}{\sigma}, \frac{\mathbf{r}_{i k}}{\sigma}, \frac{\mathbf{r}_{j k}}{\sigma}\right)
 $$
