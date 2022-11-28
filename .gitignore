@@ -1,6 +1,10 @@
 # Prerequisites
 *.d
+
+# Custom
 TESTS/
+.DS_Store
+.vscode
 
 # Object files
 *.o
