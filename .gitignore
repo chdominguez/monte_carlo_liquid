@@ -1,5 +1,6 @@
 # Prerequisites
 *.d
+TESTS/
 
 # Object files
 *.o
@@ -29,6 +30,7 @@
 *.dylib
 
 # Executables
+*.e
 *.exe
 *.out
 *.app
