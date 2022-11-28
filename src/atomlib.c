@@ -150,8 +150,9 @@ void copyAtom(atom from, atom *to)
 {
     atom newAtom;
     newAtom.element = from.element;
-    newAtom.name = (char *)malloc(2); // Allocating memory for the name
-    strcpy(newAtom.name, from.name);
+    newAtom.name = "Ar";
+    //newAtom.name = (char *)calloc(3, sizeof(char)); // Allocating memory for the name
+    //strcpy(newAtom.name, from.name);
     newAtom.nei_count = from.nei_count;
     newAtom.nei = from.nei;
     vector newVector;
@@ -216,20 +217,22 @@ int moveRandomAtom(atom **atoms, int n, double l, double stepSize)
 double fullLennardJones(atom *atoms, int natoms, double l, double cutoff)
 {
     double etot = 0;
+    int iter = 0;
     for (int i = 0; i < natoms - 1; i++) // The last atom will have been counted by all the other ones
     {
-        etot += singleLennardJones(atoms, natoms, i, l, cutoff);
+        etot += singleLennardJones(atoms, natoms, i, i + 1, l, cutoff);
+        iter++;
     }
     return etot;
 };
 
-double singleLennardJones(atom *atoms, int natoms, int i, double l, double cutoff)
+double singleLennardJones(atom *atoms, int natoms, int i, int m, double l, double cutoff)
 {
     double etot = 0;
-    for (int k = 0; k < atoms[i].nei_count; k++)
+    atom a = atoms[i];
+    for (int k = m; k < natoms; k++)
     {
-        atom a = atoms[i];
-        atom b = atoms[atoms[i].nei[k]];
+        atom b = atoms[k];
         double dist = shortestAtomDistance(a, b, l, cutoff);
         if (dist > 0) // Skip because of cutoff (dist would be -1 // should not have bc of neighbour list)
         {
@@ -243,13 +246,34 @@ double singleLennardJones(atom *atoms, int natoms, int i, double l, double cutof
     return 4 * etot;
 };
 
+double singleNeiLennardJones(atom *atoms, int natoms, int i, double l, double cutoff)
+{
+    double etot = 0;
+    atom a = atoms[i];
+    for (int k = 0; k < atoms[i].nei_count; k++)
+    {
+        atom b = atoms[a.nei[k]];
+        double dist = shortestAtomDistance(a, b, l, cutoff);
+        if (dist > 0) // Skip because of cutoff (dist would be -1 // should not have bc of neighbour list)
+        {
+            double term = 1.0 / dist;
+            double fterm = pow(term, 12);
+            double sterm = pow(term, 6);
+            double enow = fterm - sterm;
+            etot += enow;
+        }
+    }
+    return 4 * etot;
+};
+
+
 void addNeighbour(atom *a, int neighbour)
 {
     a->nei_count++;
     if (a->nei_count == a->nei_capacity)
     {
         a->nei_capacity *= 2;
-        a->nei = (int *)realloc(a->nei, a->nei_capacity);
+        a->nei = (int *)realloc(a->nei, a->nei_capacity*sizeof(int));
     }
     a->nei[a->nei_count - 1] = neighbour;
 }
@@ -259,6 +283,7 @@ void updateNeighbours(atom **atomlist, int natoms, double l, double rskin)
     // Empty the current list
     for (int i = 0; i < natoms; i++)
     {
+        free((*atomlist)[i].nei);
         (*atomlist)[i].nei_count = 0;
         (*atomlist)[i].nei_capacity = 100;
         (*atomlist)[i].nei = (int *)calloc(100, sizeof(int));
@@ -283,7 +308,7 @@ atom atomInit(int element, vector position)
 {
     // Define the atom
     atom a;
-    a.name = (char *)malloc(2); // Allocating memory for the name
+    a.name = (char *)calloc(3, sizeof(char)); // Allocating memory for the name
 
     strcpy(a.name, getNameFromElement(element));
     a.element = element;

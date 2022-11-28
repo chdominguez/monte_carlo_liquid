@@ -119,7 +119,7 @@ void readInput(FILE *file, mcconfig *config)
         line[strcspn(line, "\n")] = 0; // Removing trailing "\n" character
         if (startsWith(line, "\%name="))
         {
-            config->name = (char *)malloc(len); // Allocating memory for the name
+            config->name = (char *)calloc(len, sizeof(char)); // Allocating memory for the name
             strcpy(config->name, line + 6);
         }
         if (startsWith(line, "\%type="))
@@ -138,6 +138,18 @@ void readInput(FILE *file, mcconfig *config)
                 printf("Unsupported type. Allowed types are 'lennard' and 'stillinger'\n");
             }
         }
+        if (startsWith(line, "\%neighbours="))
+        {
+            char *nei = line + 12;
+            if (strcmp(nei, "true") == 0)
+            {
+                config->useNei = 1;
+            }
+            else
+            {
+                config->useNei = 0;
+            }
+        }
         if (startsWith(line, "\%density="))
         {
             config->density = strtod(line + 9, &extra);
@@ -145,8 +157,8 @@ void readInput(FILE *file, mcconfig *config)
         if (startsWith(line, "\%cutoff="))
         {
             config->cutoff = strtod(line + 8, &extra);
-            config->sigma = config->cutoff / 3;
-            config->rskin = config->cutoff * (4 / 3);
+            config->sigma = config->cutoff / 3.0;
+            config->rskin = config->cutoff * 1.5;
         }
         if (startsWith(line, "\%equilibration="))
         {

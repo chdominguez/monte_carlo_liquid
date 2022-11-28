@@ -179,7 +179,11 @@ double fullLennardJones(atom *atoms, int natoms, double l, double cutoff);
  *
  *  returns: the potential energy value for this particular atom in reduced units.
  */
-double singleLennardJones(atom *atoms, int natoms, int n, double l, double cutoff);
+double singleLennardJones(atom *atoms, int natoms, int n, int m, double l, double cutoff);
+
+double fullNeiLennardJones(atom *atoms, int natoms, double l, double cutoff);
+
+double singleNeiLennardJones(atom *atoms, int natoms, int n, double l, double cutoff);
 
 /// @brief Updates the atom neighbours for a list of atoms
 /// @param atomlist The list of atoms to compute its neighbours

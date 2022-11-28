@@ -42,6 +42,8 @@ typedef struct MCConfiguration {
     double sigma;
     double cutoff;
     double step;
+
+    int useNei;
     double rskin;
 
     int equilib;
