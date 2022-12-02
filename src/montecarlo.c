@@ -2,6 +2,9 @@
 #include <string.h>
 #include "tools.h"
 #include <time.h>
+#ifdef _OPENMP
+#include <omp.h>
+#endif
 
 double monteCarloProbability(double change, double reducedT)
 {
@@ -164,7 +167,7 @@ void trialIteration(mcconfig *config, double *energy, int *changes)
 }
 // changes count to update the neighbours accordingly
 // squared_max_dist (rskin - cutoff) ^ 2
-void trialNeiIteration(mcconfig *config, double *energy, int *changes, double squared_max_dist)
+void trialLJIteration(mcconfig *config, double *energy, int *changes, double squared_max_dist)
 {
     int r = getRandomInt(0, config->natoms - 1);
     double prevEnergy = singleNeiLennardJones(config->atoms, config->natoms, r, config->l, config->squared_cutoff);
@@ -209,6 +212,60 @@ void trialNeiIteration(mcconfig *config, double *energy, int *changes, double sq
         config->atoms[r].position = oldpos;
     }
     // free(newPositions);
+}
+
+void trialStillingerIteration(mcconfig *config, double *energy, int *changes, double squared_max_dist)
+{
+    // Get a random integer between 0 and the total number of atoms - 1
+    int r = getRandomInt(0, config->natoms - 1);
+
+    // Compute the energy corresponding to atom r
+    double prevEnergy = stillingerModel(config->atoms, config->natoms, r, config->l, config->squared_cutoff);
+    
+    // Change the position of atom r and saving the old position
+    vector oldpos = moveRandomAtom(&config->atoms, r, config->l, config->step);
+    
+    // Compute the new energy after moving atom r
+    double postEnergy = stillingerModel(config->atoms, config->natoms, r, config->l, config->squared_cutoff);
+    
+    // The change of energy
+    double change = postEnergy - prevEnergy;
+
+    // To control whether to save or not the new arrangement
+    int printAtoms = 0;
+
+    if (change <= 0) // Accept change
+    {
+        printAtoms = 1;
+    }
+    else // Distribution
+    {
+        double p = monteCarloProbability(change, config->temp);
+        double w = getRandomDouble(0, 1);
+        if (p >= w)
+        {
+            printAtoms = 1;
+        }
+    }
+
+    // Save the new position
+    if (printAtoms)
+    {
+        (*energy) += change;
+        (*changes)++;
+        atom movedAtom = config->atoms[r];
+        vector v_moved = substractVector(movedAtom.position, movedAtom.nei_position);
+        v_moved = MIVector(v_moved, config->l);
+        double squared_moved = sumSquaredComponents(v_moved);
+        if (squared_moved >= squared_max_dist) // Update the neighbours if the distance moved by this atoms is superior to rskin / 2
+        {
+            updateNeighbours(&config->atoms, config->natoms, config->l, config->squared_rskin);
+        }
+    }
+    else // Erase the new position
+    {
+        config->atoms[r].position = oldpos;
+    }
 }
 
 grdist gr_init(mcconfig config)
@@ -310,9 +367,6 @@ void performMonteCarlo(mcconfig config)
 
     // Initialize the distribution function class
     grdist gr = gr_init(config);
-    // Calculate Lennard-Jones energy
-    double energy = fullLennardJones(config.atoms, config.natoms, config.l, config.squared_cutoff);
-    printf("Initial energy: %lf\n", energy);
 
     int iterations = (config.equilib + config.production) * config.natoms;
     int changes = 0; // Count accepted moves
@@ -323,45 +377,65 @@ void performMonteCarlo(mcconfig config)
     // Save initial positions
     printXYZFile(config.atoms, config.natoms, config.name, fptr);
 
-    // The actual monte-carlo iterations
-    if (config.useNei == 0)
-    {
-        for (int i = 0; i < iterations; i++)
-        {
-            trialIteration(&config, &energy, &changes);
-            if (i > config.equilib * config.natoms)
-            {
-                if (i % config.natoms == 0) // Save each sweep
-                {
-                    //printXYZFile(config.atoms, config.natoms, config.name, fptr);
-                    update_gr(&gr, config);
-                }
-            }
-        }
-    }
-    else if (config.useNei == 1)
-    {
-        printf("Using neighbours\n");
+    printf("Using neighbours\n");
 
-        double max_squared_dist = pow(sqrt(config.squared_rskin) - sqrt(config.squared_cutoff), 2);
-        updateNeighbours(&config.atoms, config.natoms, config.l, config.squared_rskin);
+    double max_squared_dist = pow(sqrt((config.squared_rskin) - sqrt(config.squared_cutoff)) / 2.0, 2);
+    updateNeighbours(&config.atoms, config.natoms, config.l, config.squared_rskin);
+
+    double energy = 0;    // Initialize energy variable
+    double completed = 0; // Keep track of the simulation status
+    if (config.type == 1)
+    {
+        // Calculate Lennard-Jones energy
+        energy = fullLennardJones(config.atoms, config.natoms, config.l, config.squared_cutoff);
+        printf("Initial energy: %lf\n", energy);
         for (int i = 0; i < iterations; i++)
         {
-            trialNeiIteration(&config, &energy, &changes, max_squared_dist);
+            trialLJIteration(&config, &energy, &changes, max_squared_dist);
             if (i > config.equilib * config.natoms)
             {
                 if (i % config.natoms == 0) // Save each sweep
                 {
-                    //printXYZFile(config.atoms, config.natoms, config.name, fptr);
+                    completed = ((double)i / iterations) * 100.0;
+                    printf("\r%.0f%% ", completed);
+                    fflush(stdout);
+                    // printXYZFile(config.atoms, config.natoms, config.name, fptr);
                     update_gr(&gr, config);
                 }
             }
         }
+        updateNeighbours(&config.atoms, config.natoms, config.l, config.squared_rskin);
+        printf("Saved arrangement has full %lf energy\n", fullLennardJones(config.atoms, config.natoms, config.l, config.squared_cutoff));
     }
+    else if (config.type == 2)
+    {
+        energy = fullStillinger(config.atoms, config.natoms, config.l, config.squared_cutoff);
+        for (int i = 0; i < iterations; i++)
+        {
+            trialStillingerIteration(&config, &energy, &changes, max_squared_dist);
+            if (i % config.natoms == 0) // Save each sweep
+            {
+                completed = ((double)i / iterations) * 100.0;
+                printf("\r%.0f%% ", completed);
+                fflush(stdout);
+                if (i > config.equilib * config.natoms) // Update gr only on the production phase
+                {
+                    update_gr(&gr, config);
+                }
+            }
+        }
+        updateNeighbours(&config.atoms, config.natoms, config.l, config.squared_rskin);
+        printf("\nSaved arrangement has full %lf energy\n", fullStillinger(config.atoms, config.natoms, config.l, config.squared_cutoff));
+    }
+    else
+    {
+        printf("Error selecting model...\n");
+    }
+
+    //}
 
     printf("Accepted %.2lf%% of the changes\n", ((1.0 * changes) / iterations) * 100);
     printf("Final energy with changes: %lf\n", energy);
-    printf("Saved arrangement has full %lf energy\n", fullLennardJones(config.atoms, config.natoms, config.l, config.squared_cutoff));
 
     // Close the output file
     fclose(fptr);

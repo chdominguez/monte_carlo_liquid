@@ -206,3 +206,21 @@ void updateNeighbours(atom **atomlist, int natoms, double l, double cutoff);
 /// @param id The unique identifier of the atom
 /// @return The initialized atom
 atom atomInit(int element, vector position, int id);
+
+/// @brief Computes the energy with the Stillinger model for silicon with neighbours
+/// @param atoms The list of atoms
+/// @param natoms The number of atoms
+/// @param m The atom to count the nergy
+/// @param l The box lenght
+/// @param cutoff_squared The squared cutoff
+/// @return The energy of the configuration
+double stillingerModel(atom *atoms, int natoms, int m, double l, double cutoff_squared);
+
+/// @brief Computes the energy with the Stillinger model for silicon for all atoms
+/// @param atoms The list of atoms
+/// @param natoms The number of atoms
+/// @param m The atom to count the nergy
+/// @param l The box lenght
+/// @param cutoff_squared The squared cutoff
+/// @return The energy of the configuration
+double fullStillinger(atom *atoms, int natoms, double l, double cutoff_squared);

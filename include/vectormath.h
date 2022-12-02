@@ -104,3 +104,9 @@ double getRandomDouble(double lower, double upper);
  *  upper: the upper number in the range
  */
 int getRandomInt(int lower, int upper);
+
+/// @brief Compute the angle between two vectors
+/// @param a First vector
+/// @param b Second vector
+/// @return The angle in radians
+double angleBetweenVectors(vector a, vector b);

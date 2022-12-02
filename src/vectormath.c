@@ -74,3 +74,15 @@ int getRandomInt(int lower, int upper)
 {
     return (rand() % (upper - lower + 1)) + lower;
 }
+
+double dotProduct(vector a, vector b)
+{
+    return a.x *b.x + a.y *b.y + a.z *b.z;
+}
+
+double angleBetweenVectors(vector a, vector b)
+{
+    normalize(&a);
+    normalize(&b);
+    return acos(dotProduct(a, b));
+}

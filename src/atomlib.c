@@ -75,7 +75,7 @@ vector MIVector(vector u, double l)
 
 double shortestMIDistance(vector a, vector b, double l, double squared_cutoff)
 {
-    
+
     vector dist_vect = substractVector(b, a);
 
     vector v_rmij = MIVector(dist_vect, l);
@@ -212,7 +212,9 @@ void copyAtomList(atom *from, atom **to, int n)
 
 vector moveRandomAtom(atom **atoms, int r, double l, double stepSize)
 {
+    // Saving old position to a new variable to return it
     vector oldpos = (*atoms)[r].position;
+
     (*atoms)[r].position.x += getRandomDouble(-1, 1) * stepSize;
     (*atoms)[r].position.y += getRandomDouble(-1, 1) * stepSize;
     (*atoms)[r].position.z += getRandomDouble(-1, 1) * stepSize;
@@ -384,4 +386,144 @@ atom atomInit(int element, vector position, int id)
     a.position = position;
 
     return a;
+}
+
+double f2(double r)
+{
+    // This will only apply to sillicon thus the values can be hardcoded
+    double A, B, aa;
+    A = 7.049556277;
+    B = 0.6022245584;
+    aa = 1.80;
+
+    double r_term = 1.0 / pow(r, 4);
+    double exp_term = 1.0 / (r - aa);
+    return A * (B * r_term - 1) * exp(exp_term);
+}
+
+double V2(atom *atoms, int natoms, int m, double l, double cutoff_squared)
+{
+    double toten = 0;
+    atom a = atoms[m];
+    for (int i = 0; i < a.nei_count; i++)
+    {
+        atom b = atoms[a.nei[i]];
+        double dist = shortestAtomDistance(a, b, l, cutoff_squared);
+        if (dist > 0)
+        {
+            toten += f2(dist);
+        }
+    }
+    return toten;
+}
+
+double hfunc(double rij, double rik, double theta)
+{
+    // This will only apply to sillicon thus the values can be hardcoded
+    double aa, lamda, gamma;
+    aa = 1.80;
+    lamda = 21.0;
+    gamma = 1.20;
+
+    double exp_term = (gamma / (rij - aa)) + (gamma / (rik - aa));
+    double cos_term = pow(cos(theta) + (1.0 / 3.0), 2);
+
+    return lamda * exp(exp_term) * cos_term;
+}
+
+double V3(atom *atoms, int natoms, int m, double l, double cutoff_squared)
+{
+    double toten = 0;
+    atom a = atoms[m];
+    for (int i = 0; i < a.nei_count; i++)
+    {
+        atom b = atoms[a.nei[i]];
+        for (int j = i + 1; j < a.nei_count; j++)
+        {
+            atom c = atoms[a.nei[j]];
+            vector pos_mi_b = MIVector(b.position, l);
+            vector pos_mi_c = MIVector(c.position, l);
+            vector rij = substractVector(pos_mi_b, a.position);
+            vector rik = substractVector(pos_mi_c, a.position);
+            double d_rij = sumSquaredComponents(rij);
+            double d_rik = sumSquaredComponents(rik);
+            if (d_rij > cutoff_squared || d_rik > cutoff_squared)
+            {
+                continue;
+            }
+            double angle = angleBetweenVectors(rij, rik);
+            toten += hfunc(sqrt(d_rij), sqrt(d_rik), angle);
+        }
+    }
+
+    for (int i = 0; i < a.nei_count; i++)
+    {
+        atom b = atoms[a.nei[i]];
+        for (int j = i + 1; j < a.nei_count; j++)
+        {
+            atom c = atoms[a.nei[j]];
+            vector pos_mi_a = MIVector(a.position, l);
+            vector pos_mi_c = MIVector(c.position, l);
+            vector rji = substractVector(pos_mi_a, b.position);
+            vector rjk = substractVector(pos_mi_c, b.position);
+            double d_rji = sumSquaredComponents(rji);
+            double d_rjk = sumSquaredComponents(rjk);
+            if (d_rji > cutoff_squared || d_rjk > cutoff_squared)
+            {
+                continue;
+            }
+            double angle = angleBetweenVectors(rji, rjk);
+            toten += hfunc(sqrt(d_rji), sqrt(d_rjk), angle);
+        }
+    }
+
+    
+    return toten;
+}
+
+double stillingerModel(atom *atoms, int natoms, int m, double l, double cutoff_squared)
+{
+    return V2(atoms, natoms, m, l, cutoff_squared) + V3(atoms, natoms, m, l, cutoff_squared);
+}
+
+double fullStillinger(atom *atoms, int natoms, double l, double cutoff_squared)
+{
+    double etot = 0;
+    for (int i = 0; i < natoms - 1; i++)
+    {
+        for (int j = i + 1; j < natoms; j++)
+        {
+            double dist = shortestAtomDistance(atoms[i], atoms[j], l, cutoff_squared);
+            if (dist > 0)
+            {
+                etot += f2(dist);
+            }
+        }
+    }
+    for (int i = 0; i < natoms - 2; i++)
+    {
+        atom a = atoms[i];
+        for (int j = i + 1; j < natoms - 1; j++)
+        {
+            atom b = atoms[j];
+            for (int k = j + 1; k < natoms; k++)
+            {
+                atom c = atoms[k];
+                vector pos_mi_b = MIVector(b.position, l);
+                vector pos_mi_c = MIVector(c.position, l);
+                vector rij = substractVector(pos_mi_b, a.position);
+                vector rik = substractVector(pos_mi_c, a.position);
+                double d_rij = sumSquaredComponents(rij);
+                double d_rik = sumSquaredComponents(rik);
+                if (d_rij > cutoff_squared || d_rik > cutoff_squared)
+                {
+                    continue;
+                }
+                double angle = angleBetweenVectors(rij, rik);
+                etot += hfunc(sqrt(d_rij), sqrt(d_rik), angle);
+            }
+        }
+    }
+
+    return etot;
 }
