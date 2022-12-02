@@ -156,9 +156,11 @@ void readInput(FILE *file, mcconfig *config)
         }
         if (startsWith(line, "\%cutoff="))
         {
-            config->cutoff = strtod(line + 8, &extra);
-            config->sigma = config->cutoff / 3.0;
-            config->rskin = config->cutoff * 1.5;
+            config->squared_cutoff = strtod(line + 8, &extra);
+            config->sigma = config->squared_cutoff / 3.0;
+            config->squared_rskin = config->squared_cutoff * 1.5;
+            config->squared_rskin *= config->squared_rskin;
+            config->squared_cutoff *= config->squared_cutoff;
         }
         if (startsWith(line, "\%equilibration="))
         {

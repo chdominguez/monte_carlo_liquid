@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "tools.h"
+#include <time.h>
 
 double monteCarloProbability(double change, double reducedT)
 {
@@ -51,7 +52,7 @@ int generateAtoms(double density, double lenght, atom **atoms, int element)
                 u.x = lenght / M * (i + 1);
                 u.y = lenght / M * (j + 1);
                 u.z = lenght / M * (k + 1);
-                atemp[aCount] = atomInit(element, u);
+                atemp[aCount] = atomInit(element, u, aCount + 1);
                 aCount++;
             }
         }
@@ -105,9 +106,11 @@ int generateAtoms(double density, double lenght, atom **atoms, int element)
         {
             continue;
         }
-        (*atoms)[aCount] = atemp[i];
+        copyAtom(atemp[i], &(*atoms)[aCount]);
+        //(*atoms)[aCount] = atemp[i];
         aCount++;
     }
+    free(atemp);
     printf("Total atoms placed: %d\n", n);
     return n;
 }
@@ -125,15 +128,15 @@ void printAtomList(atom *list, int size)
     }
 }
 
-void trialIteration(mcconfig *config, double *energy)
+void trialIteration(mcconfig *config, double *energy, int *changes)
 {
-    atom *newPositions;
-    copyAtomList(config->atoms, &newPositions, config->natoms);
-    int r = moveRandomAtom(&newPositions, config->natoms, config->l, config->step);
-    double prevEnergy = singleLennardJones(config->atoms, config->natoms, r, 0, config->l, config->cutoff);
-    double postEnergy = singleLennardJones(newPositions, config->natoms, r, 0, config->l, config->cutoff);
+    int r = getRandomInt(0, config->natoms - 1);
+    // copyAtomList(config->atoms, &newPositions, config->natoms);
+    double prevEnergy = singleLennardJones(config->atoms, config->natoms, r, 0, config->l, config->squared_cutoff);
+    vector oldpos = moveRandomAtom(&config->atoms, r, config->l, config->step);
+    double postEnergy = singleLennardJones(config->atoms, config->natoms, r, 0, config->l, config->squared_cutoff);
     double change = postEnergy - prevEnergy;
-    
+
     int printAtoms = 0;
 
     if (change <= 0) // Accept change
@@ -151,20 +154,22 @@ void trialIteration(mcconfig *config, double *energy)
     }
     if (printAtoms)
     {
-        free(config->atoms);
-        copyAtomList(newPositions, &config->atoms, config->natoms);
-        *energy += change;
+        (*energy) += change;
+        (*changes)++;
     }
-    free(newPositions);
+    else
+    {
+        config->atoms[r].position = oldpos;
+    }
 }
-
-void trialNeiIteration(mcconfig *config, double *energy)
+// changes count to update the neighbours accordingly
+// squared_max_dist (rskin - cutoff) ^ 2
+void trialNeiIteration(mcconfig *config, double *energy, int *changes, double squared_max_dist)
 {
-    atom *newPositions;
-    copyAtomList(config->atoms, &newPositions, config->natoms);
-    int r = moveRandomAtom(&newPositions, config->natoms, config->l, config->step);
-    double prevEnergy = 4 * singleNeiLennardJones(config->atoms, config->natoms, r, config->l, config->cutoff);
-    double postEnergy = 4 * singleNeiLennardJones(newPositions, config->natoms, r, config->l, config->cutoff);
+    int r = getRandomInt(0, config->natoms - 1);
+    double prevEnergy = singleNeiLennardJones(config->atoms, config->natoms, r, config->l, config->squared_cutoff);
+    vector oldpos = moveRandomAtom(&config->atoms, r, config->l, config->step);
+    double postEnergy = singleNeiLennardJones(config->atoms, config->natoms, r, config->l, config->squared_cutoff);
     double change = postEnergy - prevEnergy;
 
     int printAtoms = 0;
@@ -184,10 +189,26 @@ void trialNeiIteration(mcconfig *config, double *energy)
     }
     if (printAtoms)
     {
-        copyAtomList(newPositions, &config->atoms, config->natoms);
-        *energy += change;
+        // free(config->atoms);
+        // copyAtomList(newPositions, &config->atoms, config->natoms);
+        (*energy) += change;
+        (*changes)++;
+
+        atom movedAtom = config->atoms[r];
+        vector v_moved = substractVector(movedAtom.position, movedAtom.nei_position);
+        v_moved = MIVector(v_moved, config->l);
+        double squared_moved = sumSquaredComponents(v_moved);
+        if (squared_moved >= squared_max_dist)
+        {
+            // printf("Updating neighbours after %d changes\n", *changes);
+            updateNeighbours(&config->atoms, config->natoms, config->l, config->squared_rskin);
+        }
     }
-    free(newPositions);
+    else
+    {
+        config->atoms[r].position = oldpos;
+    }
+    // free(newPositions);
 }
 
 grdist gr_init(mcconfig config)
@@ -199,6 +220,7 @@ grdist gr_init(mcconfig config)
 
     gr.resolution = 400;
     gr.rmax = 4;
+    gr.rmax_squared = gr.rmax * gr.rmax;
     gr.deltaR = gr.rmax / gr.resolution;
 
     gr.n = (int *)calloc(gr.resolution, sizeof(int));
@@ -241,7 +263,7 @@ void update_gr(grdist *gr, mcconfig config)
     {
         for (int k = j + 1; k < config.natoms; k++)
         {
-            double dist = shortestAtomDistance(config.atoms[j], config.atoms[k], config.l, gr->rmax);
+            double dist = shortestAtomDistance(config.atoms[j], config.atoms[k], config.l, gr->rmax_squared);
             if (dist < 0)
             {
                 continue; // Skip because distance is over the max radius of g(r)
@@ -259,134 +281,6 @@ void update_gr(grdist *gr, mcconfig config)
     }
 }
 
-void neighboursMonteCarlo(mcconfig config)
-{
-    // Prepare the output file
-    FILE *fptr;
-    char *outputxyz = (char *)calloc(20, sizeof(char));
-    strcpy(outputxyz, config.name);
-    strcat(outputxyz, ".xyz");
-    fptr = fopen(outputxyz, "w");
-    if (fptr == NULL)
-    {
-        printf("Error!");
-        exit(1);
-    }
-
-    // Initialize the distribution function class
-    grdist gr = gr_init(config);
-    // Calculate initial neighbours and Lennard-Jones energy
-    config.rskin = config.cutoff + config.step * 15; // 15 Steps max iterations per neighbour list
-    updateNeighbours(&config.atoms, config.natoms, config.l, config.rskin); // Compute the initial neighbours
-    double energy = fullLennardJones(config.atoms, config.natoms, config.l, config.cutoff);
-    printf("Initial energy: %lf\n", energy);
-
-    int sweeps = 0;
-    int iterations = (config.equilib + config.production) * config.natoms;
-
-    // Print in terminal the total number of iterations
-    printf("Total iterations: %d\nEquilibrium: %d\nProduction: %d\n", iterations, config.equilib, config.production);
-
-    // Save initial positions
-    printXYZFile(config.atoms, config.natoms, config.name, fptr);
-
-    // The actual monte-carlo iterations
-
-    for (int i = 0; i < iterations; i++)
-    {
-        trialNeiIteration(&config, &energy);
-
-        if (i % 15 == 0)
-        {
-            updateNeighbours(&config.atoms, config.natoms, config.l, config.rskin);
-        }
-
-        if (i % config.natoms == 0)
-        {
-            sweeps++;
-            if (sweeps > config.equilib) // Only update XYZ file and gr when on the production phase
-            {
-                // Save positions for visualization purposes
-                printXYZFile(config.atoms, config.natoms, config.name, fptr);
-
-                // Update gr
-                update_gr(&gr, config);
-            }
-        }
-    }
-
-    printf("Final energy with changes: %lf\n", energy);
-    printf("Saved arrangement has full %lf energy\n", fullLennardJones(config.atoms, config.natoms, config.l, config.cutoff));
-
-    // Close the output file
-    fclose(fptr);
-
-    // Save the distribution function
-    char *outputgidst = config.name;
-    strcat(outputgidst, ".gdist");
-    save_gr(outputgidst, gr);
-}
-
-void normalMonteCarlo(mcconfig config)
-{
-    // Prepare the output file
-    FILE *fptr;
-    char *outputxyz = (char *)calloc(20, sizeof(char));
-    strcpy(outputxyz, config.name);
-    strcat(outputxyz, ".xyz");
-    fptr = fopen(outputxyz, "w");
-    if (fptr == NULL)
-    {
-        printf("Error!");
-        exit(1);
-    }
-
-    // Initialize the distribution function class
-    grdist gr = gr_init(config);
-    // Calculate Lennard-Jones energy
-    double energy = fullLennardJones(config.atoms, config.natoms, config.l, config.cutoff);
-    printf("Initial energy: %lf\n", energy);
-
-    int sweeps = 0;
-    int iterations = (config.equilib + config.production) * config.natoms;
-
-    // Print in terminal the total number of iterations
-    printf("Total iterations: %d\nEquilibrium: %d\nProduction: %d\n", iterations, config.equilib, config.production);
-
-    // Save initial positions
-    printXYZFile(config.atoms, config.natoms, config.name, fptr);
-
-    // The actual monte-carlo iterations
-    for (int i = 0; i < iterations; i++)
-    {
-        trialIteration(&config, &energy);
-
-        if (i % config.natoms == 0)
-        {
-            sweeps++;
-            if (sweeps > config.equilib) // Only update XYZ file and gr when on the production phase
-            {
-                // Save positions for visualization purposes
-                printXYZFile(config.atoms, config.natoms, config.name, fptr);
-
-                // Update gr
-                update_gr(&gr, config);
-            }
-        }
-    }
-
-    printf("Final energy with changes: %lf\n", energy);
-    printf("Saved arrangement has full %lf energy\n", fullLennardJones(config.atoms, config.natoms, config.l, config.cutoff));
-
-    // Close the output file
-    fclose(fptr);
-
-    // Save the distribution function
-    char *outputgidst = config.name;
-    strcat(outputgidst, ".gdist");
-    save_gr(outputgidst, gr);
-}
-
 void performMonteCarlo(mcconfig config)
 {
     printf("%s\n", config.name);
@@ -402,12 +296,78 @@ void performMonteCarlo(mcconfig config)
         config.natoms = generateAtoms(config.density, config.l, &config.atoms, element);
     }
 
-    if (config.useNei == 1)
+    // Prepare the output file
+    FILE *fptr;
+    char *outputxyz = (char *)calloc(20, sizeof(char));
+    strcpy(outputxyz, config.name);
+    strcat(outputxyz, ".xyz");
+    fptr = fopen(outputxyz, "w");
+    if (fptr == NULL)
     {
-        neighboursMonteCarlo(config);
+        printf("Error!");
+        exit(1);
     }
-    else
+
+    // Initialize the distribution function class
+    grdist gr = gr_init(config);
+    // Calculate Lennard-Jones energy
+    double energy = fullLennardJones(config.atoms, config.natoms, config.l, config.squared_cutoff);
+    printf("Initial energy: %lf\n", energy);
+
+    int iterations = (config.equilib + config.production) * config.natoms;
+    int changes = 0; // Count accepted moves
+
+    // Print in terminal the total number of iterations
+    printf("Total iterations: %d\nEquilibrium: %d\nProduction: %d\n", iterations, config.equilib, config.production);
+
+    // Save initial positions
+    printXYZFile(config.atoms, config.natoms, config.name, fptr);
+
+    // The actual monte-carlo iterations
+    if (config.useNei == 0)
     {
-        normalMonteCarlo(config);
+        for (int i = 0; i < iterations; i++)
+        {
+            trialIteration(&config, &energy, &changes);
+            if (i > config.equilib * config.natoms)
+            {
+                if (i % config.natoms == 0) // Save each sweep
+                {
+                    //printXYZFile(config.atoms, config.natoms, config.name, fptr);
+                    update_gr(&gr, config);
+                }
+            }
+        }
     }
+    else if (config.useNei == 1)
+    {
+        printf("Using neighbours\n");
+
+        double max_squared_dist = pow(sqrt(config.squared_rskin) - sqrt(config.squared_cutoff), 2);
+        updateNeighbours(&config.atoms, config.natoms, config.l, config.squared_rskin);
+        for (int i = 0; i < iterations; i++)
+        {
+            trialNeiIteration(&config, &energy, &changes, max_squared_dist);
+            if (i > config.equilib * config.natoms)
+            {
+                if (i % config.natoms == 0) // Save each sweep
+                {
+                    //printXYZFile(config.atoms, config.natoms, config.name, fptr);
+                    update_gr(&gr, config);
+                }
+            }
+        }
+    }
+
+    printf("Accepted %.2lf%% of the changes\n", ((1.0 * changes) / iterations) * 100);
+    printf("Final energy with changes: %lf\n", energy);
+    printf("Saved arrangement has full %lf energy\n", fullLennardJones(config.atoms, config.natoms, config.l, config.squared_cutoff));
+
+    // Close the output file
+    fclose(fptr);
+
+    // Save the distribution function
+    char *outputgidst = config.name;
+    strcat(outputgidst, ".gdist");
+    save_gr(outputgidst, gr);
 }

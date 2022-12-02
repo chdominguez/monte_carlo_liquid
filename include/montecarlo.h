@@ -40,11 +40,11 @@ typedef struct MCConfiguration {
     double temp;
 
     double sigma;
-    double cutoff;
+    double squared_cutoff;
     double step;
 
     int useNei;
-    double rskin;
+    double squared_rskin;
 
     int equilib;
     int production;
@@ -58,6 +58,7 @@ typedef struct RadialDistribution {
 
     int resolution;
     double rmax;
+    double rmax_squared;
     double deltaR;
 } grdist;
 

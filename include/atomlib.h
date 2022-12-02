@@ -16,10 +16,12 @@ typedef struct Atom {
     char *name;
     int element;
     struct Vector position;
+    int id;
 
     int nei_capacity;
     int nei_count;
     int *nei;
+    struct Vector nei_position;
 
 } atom;
 
@@ -86,6 +88,12 @@ void reducedVolume(int element, double *epsilon, double *sigma);
  */
 double shortestAtomDistance(atom a, atom b, double l, double cutoff);
 
+/// @brief Returns the corrected MI vector based on the box length l
+/// @param u The vector to correct
+/// @param l Box length
+/// @return The corrected vector
+vector MIVector(vector u, double l);
+
 /*
  * Function:  shortestMIDistance 
  * --------------------
@@ -150,7 +158,7 @@ void copyAtomList(atom *from, atom **to, int n);
 /// @param l The length of the box for the mirror image convention
 /// @param stepSize The size of the step
 /// @return The moved index
-int moveRandomAtom(atom **atoms, int n, double l, double stepSize);
+vector moveRandomAtom(atom **atoms, int n, double l, double stepSize);
 
 /*
  * Function:  lennardJones 
@@ -195,5 +203,6 @@ void updateNeighbours(atom **atomlist, int natoms, double l, double cutoff);
 /// @brief Initializes an atom instance
 /// @param element The element number
 /// @param position The vector with the atom position
+/// @param id The unique identifier of the atom
 /// @return The initialized atom
-atom atomInit(int element, vector position);
+atom atomInit(int element, vector position, int id);

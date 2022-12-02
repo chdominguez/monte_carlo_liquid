@@ -34,31 +34,60 @@ char *getNameFromElement(int element)
     return "X"; // Element not supported
 }
 
-double shortestAtomDistance(atom a, atom b, double l, double cutoff)
+double shortestAtomDistance(atom a, atom b, double l, double squared_cutoff)
 {
-    return shortestMIDistance(a.position, b.position, l, cutoff);
+    return shortestMIDistance(a.position, b.position, l, squared_cutoff);
 }
 
-double shortestMIDistance(vector a, vector b, double l, double cutoff)
+vector MIVector(vector u, double l)
 {
-    double rij = sumSquaredComponents(substractVector(b, a));
-    double rmij = sumSquaredComponents(substractVector(b, addToComponents(l, a)));
+    vector mi_vec = u;
 
-    double max_distance = cutoff * cutoff;
+    if (mi_vec.x > l * 0.5) // X
+    {
+        mi_vec.x -= l;
+    }
+    if (mi_vec.x <= -l * 0.5)
+    {
+        mi_vec.x += l;
+    }
 
-    if (rij > max_distance && rmij > max_distance) // Cancel the computation of the square root because its outside the cutoff
+    if (mi_vec.y > l * 0.5) // Y
+    {
+        mi_vec.y -= l;
+    }
+    if (mi_vec.y <= -l * 0.5)
+    {
+        mi_vec.y += l;
+    }
+
+    if (mi_vec.z > l * 0.5) // Z
+    {
+        mi_vec.z -= l;
+    }
+    if (mi_vec.z <= -l * 0.5)
+    {
+        mi_vec.z += l;
+    }
+
+    return mi_vec;
+}
+
+double shortestMIDistance(vector a, vector b, double l, double squared_cutoff)
+{
+    
+    vector dist_vect = substractVector(b, a);
+
+    vector v_rmij = MIVector(dist_vect, l);
+
+    double rmij = sumSquaredComponents(v_rmij);
+
+    if (rmij >= squared_cutoff) // Cancel the computation of the square root because its outside the cutoff
     {
         return -1;
     }
 
-    if (rij > rmij)
-    {
-        return sqrt(rmij);
-    }
-    else
-    {
-        return sqrt(rij);
-    }
+    return sqrt(rmij);
 }
 
 double longestDistance(int n, atom *atoms)
@@ -151,15 +180,23 @@ void copyAtom(atom from, atom *to)
     atom newAtom;
     newAtom.element = from.element;
     newAtom.name = "Ar";
-    //newAtom.name = (char *)calloc(3, sizeof(char)); // Allocating memory for the name
-    //strcpy(newAtom.name, from.name);
+    // newAtom.name = (char *)calloc(3, sizeof(char)); // Allocating memory for the name
+    // strcpy(newAtom.name, from.name);
+    newAtom.nei_capacity = from.nei_capacity;
     newAtom.nei_count = from.nei_count;
-    newAtom.nei = from.nei;
+    newAtom.nei = (int *)calloc(newAtom.nei_capacity, sizeof(int));
+    memcpy(newAtom.nei, from.nei, newAtom.nei_capacity * sizeof(int));
+    vector newNeiPos;
+    newNeiPos.x = from.nei_position.x;
+    newNeiPos.y = from.nei_position.y;
+    newNeiPos.z = from.nei_position.z;
+    newAtom.nei_position = newNeiPos;
     vector newVector;
     newVector.x = from.position.x;
     newVector.y = from.position.y;
     newVector.z = from.position.z;
     newAtom.position = newVector;
+    newAtom.id = from.id;
     *to = newAtom;
 }
 
@@ -173,10 +210,9 @@ void copyAtomList(atom *from, atom **to, int n)
     *to = newlist;
 }
 
-int moveRandomAtom(atom **atoms, int n, double l, double stepSize)
+vector moveRandomAtom(atom **atoms, int r, double l, double stepSize)
 {
-    int r = getRandomInt(0, n - 1);
-
+    vector oldpos = (*atoms)[r].position;
     (*atoms)[r].position.x += getRandomDouble(-1, 1) * stepSize;
     (*atoms)[r].position.y += getRandomDouble(-1, 1) * stepSize;
     (*atoms)[r].position.z += getRandomDouble(-1, 1) * stepSize;
@@ -211,29 +247,31 @@ int moveRandomAtom(atom **atoms, int n, double l, double stepSize)
         (*atoms)[r].position.z += l;
     }
 
-    return r;
+    return oldpos;
 }
 
-double fullLennardJones(atom *atoms, int natoms, double l, double cutoff)
+double fullLennardJones(atom *atoms, int natoms, double l, double squared_cutoff)
 {
     double etot = 0;
     int iter = 0;
     for (int i = 0; i < natoms - 1; i++) // The last atom will have been counted by all the other ones
     {
-        etot += singleLennardJones(atoms, natoms, i, i + 1, l, cutoff);
+        etot += singleLennardJones(atoms, natoms, i, i + 1, l, squared_cutoff);
         iter++;
     }
     return etot;
 };
 
-double singleLennardJones(atom *atoms, int natoms, int i, int m, double l, double cutoff)
+double singleLennardJones(atom *atoms, int natoms, int i, int m, double l, double squared_cutoff)
 {
     double etot = 0;
     atom a = atoms[i];
+    int count = 0;
     for (int k = m; k < natoms; k++)
     {
+        count++;
         atom b = atoms[k];
-        double dist = shortestAtomDistance(a, b, l, cutoff);
+        double dist = shortestAtomDistance(a, b, l, squared_cutoff);
         if (dist > 0) // Skip because of cutoff (dist would be -1 // should not have bc of neighbour list)
         {
             double term = 1.0 / dist;
@@ -246,14 +284,17 @@ double singleLennardJones(atom *atoms, int natoms, int i, int m, double l, doubl
     return 4 * etot;
 };
 
-double singleNeiLennardJones(atom *atoms, int natoms, int i, double l, double cutoff)
+double singleNeiLennardJones(atom *atoms, int natoms, int i, double l, double squared_cutoff)
 {
     double etot = 0;
     atom a = atoms[i];
-    for (int k = 0; k < atoms[i].nei_count; k++)
+    int count = 0;
+    for (int k = 0; k < a.nei_count; k++)
     {
-        atom b = atoms[a.nei[k]];
-        double dist = shortestAtomDistance(a, b, l, cutoff);
+        count++;
+        int m = a.nei[k];
+        atom b = atoms[m];
+        double dist = shortestAtomDistance(a, b, l, squared_cutoff);
         if (dist > 0) // Skip because of cutoff (dist would be -1 // should not have bc of neighbour list)
         {
             double term = 1.0 / dist;
@@ -263,9 +304,27 @@ double singleNeiLennardJones(atom *atoms, int natoms, int i, double l, double cu
             etot += enow;
         }
     }
+    // if (etot == 0)
+    // {
+    //     double etot = 0;
+    //     atom a = atoms[i];
+    //     for (int k = 0; k < a.nei_count; k++)
+    //     {
+    //         int m = a.nei[k];
+    //         atom b = atoms[m];
+    //         double dist = shortestAtomDistance(a, b, l, cutoff);
+    //         if (dist > 0) // Skip because of cutoff (dist would be -1 // should not have bc of neighbour list)
+    //         {
+    //             double term = 1.0 / dist;
+    //             double fterm = pow(term, 12);
+    //             double sterm = pow(term, 6);
+    //             double enow = fterm - sterm;
+    //             etot += enow;
+    //         }
+    //     }
+    // }
     return 4 * etot;
 };
-
 
 void addNeighbour(atom *a, int neighbour)
 {
@@ -273,17 +332,18 @@ void addNeighbour(atom *a, int neighbour)
     if (a->nei_count == a->nei_capacity)
     {
         a->nei_capacity *= 2;
-        a->nei = (int *)realloc(a->nei, a->nei_capacity*sizeof(int));
+        a->nei = (int *)realloc(a->nei, a->nei_capacity * sizeof(int));
     }
     a->nei[a->nei_count - 1] = neighbour;
 }
 
-void updateNeighbours(atom **atomlist, int natoms, double l, double rskin)
+void updateNeighbours(atom **atomlist, int natoms, double l, double squared_rskin)
 {
     // Empty the current list
     for (int i = 0; i < natoms; i++)
     {
         free((*atomlist)[i].nei);
+        (*atomlist)[i].nei_position = (*atomlist)[i].position;
         (*atomlist)[i].nei_count = 0;
         (*atomlist)[i].nei_capacity = 100;
         (*atomlist)[i].nei = (int *)calloc(100, sizeof(int));
@@ -294,7 +354,7 @@ void updateNeighbours(atom **atomlist, int natoms, double l, double rskin)
     {
         for (int j = i + 1; j < natoms; j++)
         {
-            double dist = shortestAtomDistance((*atomlist)[i], (*atomlist)[j], l, rskin);
+            double dist = shortestAtomDistance((*atomlist)[i], (*atomlist)[j], l, squared_rskin);
             if (dist > 0) // The rskin is already accounted in the distance function, (-1 if outside the rskin)
             {
                 addNeighbour(&(*atomlist)[i], j);
@@ -304,11 +364,12 @@ void updateNeighbours(atom **atomlist, int natoms, double l, double rskin)
     }
 }
 
-atom atomInit(int element, vector position)
+atom atomInit(int element, vector position, int id)
 {
     // Define the atom
     atom a;
     a.name = (char *)calloc(3, sizeof(char)); // Allocating memory for the name
+    a.id = id;
 
     strcpy(a.name, getNameFromElement(element));
     a.element = element;
@@ -317,6 +378,7 @@ atom atomInit(int element, vector position)
     a.nei_capacity = 100;
     a.nei_count = 0;
     a.nei = (int *)calloc(100, sizeof(int));
+    a.nei_position = position; // Initial position = nei_position
 
     // Position of the atom
     a.position = position;

@@ -66,7 +66,7 @@ vector addToComponents(double a, vector u);
 double sumSquaredComponents(vector u);
 
 /*
- * Function:  distance 
+ * Function:  norm 
  * --------------------
  * Computes the norm of the vector
  *  
