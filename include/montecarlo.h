@@ -48,7 +48,13 @@ typedef struct MCConfiguration {
 
     int equilib;
     int production;
+
+    int gr_resolution;
+    double gr_rmax_squared;
+
 } mcconfig;
+
+mcconfig initMCConfig();
 
 typedef struct RadialDistribution {
     int naccum;
@@ -57,7 +63,6 @@ typedef struct RadialDistribution {
     double dens;
 
     int resolution;
-    double rmax;
     double rmax_squared;
     double deltaR;
 } grdist;

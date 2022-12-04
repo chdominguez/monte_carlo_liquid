@@ -16,7 +16,5 @@ int main(int argc, char **argv)
         printf("Usage: mc.exe <input.mc>\n");
     }
 
-    printf("Program finished.\n");
-
     return 0;
 }

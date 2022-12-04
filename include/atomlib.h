@@ -224,3 +224,7 @@ double stillingerModel(atom *atoms, int natoms, int m, double l, double cutoff_s
 /// @param cutoff_squared The squared cutoff
 /// @return The energy of the configuration
 double fullStillinger(atom *atoms, int natoms, double l, double cutoff_squared);
+
+void printAtom(atom a, int n);
+
+void printAtomList(atom *list, int size);

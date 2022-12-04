@@ -179,9 +179,8 @@ void copyAtom(atom from, atom *to)
 {
     atom newAtom;
     newAtom.element = from.element;
-    newAtom.name = "Ar";
-    // newAtom.name = (char *)calloc(3, sizeof(char)); // Allocating memory for the name
-    // strcpy(newAtom.name, from.name);
+    newAtom.name = (char *)calloc(strlen(from.name)+1, sizeof(char)); // Allocating memory for the name
+    strcpy(newAtom.name, from.name);
     newAtom.nei_capacity = from.nei_capacity;
     newAtom.nei_count = from.nei_count;
     newAtom.nei = (int *)calloc(newAtom.nei_capacity, sizeof(int));
@@ -306,25 +305,6 @@ double singleNeiLennardJones(atom *atoms, int natoms, int i, double l, double sq
             etot += enow;
         }
     }
-    // if (etot == 0)
-    // {
-    //     double etot = 0;
-    //     atom a = atoms[i];
-    //     for (int k = 0; k < a.nei_count; k++)
-    //     {
-    //         int m = a.nei[k];
-    //         atom b = atoms[m];
-    //         double dist = shortestAtomDistance(a, b, l, cutoff);
-    //         if (dist > 0) // Skip because of cutoff (dist would be -1 // should not have bc of neighbour list)
-    //         {
-    //             double term = 1.0 / dist;
-    //             double fterm = pow(term, 12);
-    //             double sterm = pow(term, 6);
-    //             double enow = fterm - sterm;
-    //             etot += enow;
-    //         }
-    //     }
-    // }
     return 4 * etot;
 };
 
@@ -526,4 +506,17 @@ double fullStillinger(atom *atoms, int natoms, double l, double cutoff_squared)
     }
 
     return etot;
+}
+
+void printAtom(atom a, int n)
+{
+    printf("%d %s %lf %lf %lf\n", n, a.name, a.position.x, a.position.y, a.position.z);
+}
+
+void printAtomList(atom *list, int size)
+{
+    for (int i = 0; i < size; i++)
+    {
+        printAtom(list[i], i);
+    }
 }

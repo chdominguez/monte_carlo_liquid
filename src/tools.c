@@ -187,6 +187,15 @@ void readInput(FILE *file, mcconfig *config)
         {
             config->l = strtod(line + 9, &extra);
         }
+        if (startsWith(line, "\%grmax="))
+        {
+            config->gr_rmax_squared = strtod(line + 7, &extra);
+            config->gr_rmax_squared *= config->gr_rmax_squared;
+        }
+        if (startsWith(line, "\%res="))
+        {
+            config->gr_resolution = atoi(line + 5);
+        }
     }
 }
 
@@ -196,10 +205,6 @@ const char *get_filename_ext(const char *filename)
     if (!dot || dot == filename)
         return "";
     return dot + 1;
-}
-
-void printMC(FILE *file)
-{
 }
 
 int fileReader(char *url, mcconfig *config)
@@ -222,7 +227,7 @@ int fileReader(char *url, mcconfig *config)
     // }
     if (strcmp(extension, "mc") == 0)
     {
-        printf("Reading montecarlo file\n");
+        printf("Reading montecarlo file...\n\n");
         readInput(file, config);
     }
     else
