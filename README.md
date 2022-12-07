@@ -1,6 +1,6 @@
 
 # Requirements
-* A C compiler such as CLANG or GCC
+* A C compiler (CLANG, although you can configure GCC in the makefile)
 
 # Compiling
 1.  Clone this repository 
