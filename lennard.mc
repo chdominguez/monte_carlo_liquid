@@ -1,0 +1,11 @@
+%name=lennard
+%type=lennard
+%boxsize=10.14
+%density=0.699
+%cutoff=3
+%equilibration=2000
+%production=500
+%stepsize=0.2
+%temp=1.2
+%res=400;
+%grmax=4;

@@ -1,0 +1,12 @@
+%name=stillinger
+%type=stillinger
+%boxsize=7.64610
+%density=0.48320
+%sigma=2.10
+%cutoff=1.80
+%equilibration=2500
+%production=2000
+%stepsize=0.15
+%temp=0.10
+%res=140;
+%grmax=3.5;
