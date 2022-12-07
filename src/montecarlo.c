@@ -121,19 +121,17 @@ void trialIteration(mcconfig *config, double *energy, int *changes, double squar
     int r = getRandomInt(0, config->natoms - 1);
 
     // Compute the energy corresponding to atom r
-    double prevEnergy = potential(config->atoms, config->natoms, r, config->l, config->squared_cutoff);
-    // double e1 = fullLennardJones(config->atoms, config->natoms, config->l, config->squared_cutoff);
+    double prevEnergy = potential(config->atoms, r, config->l, config->squared_cutoff);
 
     // Change the position of atom r and saving the old position
     vector oldpos = moveRandomAtom(&config->atoms, r, config->l, config->step);
 
     // Compute the new energy after moving atom r
-    double postEnergy = potential(config->atoms, config->natoms, r, config->l, config->squared_cutoff);
-    // double e2 = fullLennardJones(config->atoms, config->natoms, config->l, config->squared_cutoff);
+    double postEnergy = potential(config->atoms, r, config->l, config->squared_cutoff);
 
     // The change of energy
     double change = postEnergy - prevEnergy;
-    // double ch2 = e2 - e1;
+    // double change = fullpost - fullprev;
 
     // To control whether to save or not the new arrangement
     int printAtoms = 0;
@@ -157,13 +155,10 @@ void trialIteration(mcconfig *config, double *energy, int *changes, double squar
     {
         (*energy) += change;
         (*changes)++;
-        atom movedAtom = config->atoms[r];
-        vector v_moved = substractVector(movedAtom.position, movedAtom.nei_position);
-        v_moved = MIVector(v_moved, config->l);
-        double squared_moved = sumSquaredComponents(v_moved);
-        if (squared_moved >= squared_max_dist) // Update the neighbours if the distance moved by this atoms is superior to rskin / 2
+        double moved = shortestMIDistance(config->atoms[r].nei_position, config->atoms[r].position, config->l, squared_max_dist, NULL);
+        if (moved == -1) // Update the neighbours if the distance moved by this atoms is superior to rskin / 2
         {
-            updateNeighbours(&config->atoms, config->natoms, config->l, config->squared_rskin);
+            updateNeighbours(&config->atoms, config->natoms, config->l, config->squared_rskin_plus_cutoff);
         }
     }
     else // Erase the new position
@@ -223,7 +218,7 @@ void update_gr(grdist *gr, mcconfig config)
     {
         for (int k = j + 1; k < config.natoms; k++)
         {
-            double dist = shortestAtomDistance(config.atoms[j], config.atoms[k], config.l, gr->rmax_squared);
+            double dist = shortestAtomDistance(config.atoms[j], config.atoms[k], config.l, gr->rmax_squared, NULL);
             if (dist > 0)
             {
                 for (int l = 0; l < gr->resolution; l++)
@@ -257,6 +252,10 @@ void performMonteCarlo(mcconfig config)
         config.natoms = generateAtoms(config.density, config.l, &config.atoms, element);
         printf("Total atoms placed: %d\n", config.natoms);
     }
+    else
+    {
+        printf("Read structure from xyz\n");
+    }
 
     // Prepare the output file
     FILE *fptr;
@@ -273,18 +272,18 @@ void performMonteCarlo(mcconfig config)
     // Initialize the distribution function class
     grdist gr = gr_init(config);
 
-    int iterations = (config.equilib + config.production) * config.natoms;
+    int equilib_it = config.equilib * config.natoms;
+    int prod_it = config.production * config.natoms;
+    int total_it = prod_it + equilib_it;
     int changes = 0; // Count accepted moves
 
     // Print in terminal the total number of iterations
     printf("============Iterations============\n");
-    printf("Equilibrium: %d\nProduction: %d\nTotal: %d\n", config.equilib, config.production, iterations);
+    printf("Equilibrium: %d\nProduction: %d\nTotal: %d\n", equilib_it, prod_it, total_it);
 
-    // Save initial positions
-    printXYZFile(config.atoms, config.natoms, config.name, fptr);
-
-    double max_squared_dist = pow((sqrt(config.squared_rskin) - sqrt(config.squared_cutoff)) / 2.0, 2);
-    updateNeighbours(&config.atoms, config.natoms, config.l, config.squared_rskin);
+    // Max atom movement before updating neighbours again rskin / 2, but squared.
+    double max_squared_dist = config.squared_rskin / 4.0;
+    updateNeighbours(&config.atoms, config.natoms, config.l, config.squared_rskin_plus_cutoff);
 
     double energy = 0;    // Initialize energy variable
     double completed = 0; // Keep track of the simulation status
@@ -311,32 +310,41 @@ void performMonteCarlo(mcconfig config)
         exit(1);
     }
 
-    // Calculate Lennard-Jones energy
+    // Calculate full energy
     energy = fullPotential(config.atoms, config.natoms, config.l, config.squared_cutoff);
     printf("Initial energy: %lf\n", energy);
+
     printf("============Simulating============\n");
 
-    // Perform the Monte Carlo iterations
-    for (int i = 0; i < iterations; i++)
+    // Perform the Monte Carlo equlibration iterations
+    for (int i = 0; i < equilib_it; i++)
     {
         trialIteration(&config, &energy, &changes, max_squared_dist, potential);
         if (i % config.natoms == 0) // Save each sweep
         {
-            completed = ((double)i / iterations) * 100.0;
-            printf("\r%.0f%% ", completed);
+            completed = ((double)i / equilib_it) * 100.0;
+            printf("\rEquilibration: %.1f%% ", completed);
             fflush(stdout);
-            if (i > config.equilib * config.natoms) // Update gr only on the production phase
-            {
-                // printXYZFile(config.atoms, config.natoms, config.name, fptr);
-                update_gr(&gr, config);
-            }
+        }
+    }
+    printf("\n");
+    // Perform the Monte Carlo production iterations
+    for (int i = 0; i < prod_it; i++)
+    {
+        trialIteration(&config, &energy, &changes, max_squared_dist, potential);
+        if (i % config.natoms == 0) // Save each sweep
+        {
+            completed = ((double)i / prod_it) * 100.0;
+            printf("\rProduction: %.1f%% ", completed);
+            fflush(stdout);
+            update_gr(&gr, config);
+            printXYZFile(config.atoms, config.natoms, config.name, config.sigma, fptr);
         }
     }
 
     printf("\n=============Results==============\n");
-    printf("Saved arrangement has full %lf energy\n", fullPotential(config.atoms, config.natoms, config.l, config.squared_cutoff));
-    printf("Accepted %.2lf%% of the changes\n", ((1.0 * changes) / iterations) * 100);
-    printf("Final energy with changes: %lf\n", energy);
+    printf("Accepted %.2lf%% of the changes\n", ((1.0 * changes) / total_it) * 100);
+    printf("Final energy: %lf\n", energy);
 
     // Close the output file
     fclose(fptr);
@@ -362,6 +370,7 @@ mcconfig initMCConfig()
     config.temp = 1;
     config.sigma = 1;
     config.squared_cutoff = 1;
+    config.squared_rskin_plus_cutoff = sqrt(2);
     config.step = 1;
     config.useNei = 0;
     config.squared_rskin = 1;

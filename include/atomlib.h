@@ -50,32 +50,6 @@ int getElementFromName(char *name);
 void getElementProperties(int element, double *epsilon, double *sigma);
 
 /*
- * Function:  getElementProperties
- * --------------------
- * Gets the epsilon (well depth) and the sigma (radius of the hard core) for a given element
- *
- *  element: int corresponding to the element number
- *  epsilon: pointer to the epsilon (double) vaule
- *  sigma: pointer to the sigma (double) value
- * 
- * Note: Only two elements (Si and Ar) are allowed.
- */
-void reducedVolume(int element, double *epsilon, double *sigma);
-
-/*
- * Function:  getElementProperties
- * --------------------
- * Gets the epsilon (well depth) and the sigma (radius of the hard core) for a given element
- *
- *  element: int corresponding to the element number
- *  epsilon: pointer to the epsilon (double) vaule
- *  sigma: pointer to the sigma (double) value
- * 
- * Note: Only two elements (Si and Ar) are allowed.
- */
-void reducedVolume(int element, double *epsilon, double *sigma);
-
-/*
  * Function:  shortestAtomDistance 
  * --------------------
  * Returns the shortest distance between two atoms taking into account the minimum-image convention
@@ -86,7 +60,7 @@ void reducedVolume(int element, double *epsilon, double *sigma);
  *
  *  returns: the shortest distance between the atoms.
  */
-double shortestAtomDistance(atom a, atom b, double l, double cutoff);
+double shortestAtomDistance(atom a, atom b, double l, double cutoff, vector *rij);
 
 /// @brief Returns the corrected MI vector based on the box length l
 /// @param u The vector to correct
@@ -105,7 +79,7 @@ vector MIVector(vector u, double l);
  *
  *  returns: the shortest distance between the positions.
  */
-double shortestMIDistance(vector a, vector b, double l, double cutoff);
+double shortestMIDistance(vector a, vector b, double l, double cutoff, vector *rij);
 
 /*
  * Function:  shortestDistance 
@@ -191,7 +165,7 @@ double singleLennardJones(atom *atoms, int natoms, int n, int m, double l, doubl
 
 double fullNeiLennardJones(atom *atoms, int natoms, double l, double cutoff);
 
-double singleNeiLennardJones(atom *atoms, int natoms, int n, double l, double cutoff);
+double singleNeiLennardJones(atom *atoms, int n, double l, double cutoff);
 
 /// @brief Updates the atom neighbours for a list of atoms
 /// @param atomlist The list of atoms to compute its neighbours
@@ -214,7 +188,7 @@ atom atomInit(int element, vector position, int id);
 /// @param l The box lenght
 /// @param cutoff_squared The squared cutoff
 /// @return The energy of the configuration
-double stillingerModel(atom *atoms, int natoms, int m, double l, double cutoff_squared);
+double stillingerModel(atom *atoms, int i, double l, double cutoff_squared);
 
 /// @brief Computes the energy with the Stillinger model for silicon for all atoms
 /// @param atoms The list of atoms
@@ -228,3 +202,6 @@ double fullStillinger(atom *atoms, int natoms, double l, double cutoff_squared);
 void printAtom(atom a, int n);
 
 void printAtomList(atom *list, int size);
+
+double V3(atom *atoms, int i, double l, double cutoff_squared);
+double V2(atom *atoms, int m, double l, double cutoff_squared);

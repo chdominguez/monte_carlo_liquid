@@ -30,6 +30,7 @@
 typedef struct MCConfiguration {
     char *name;
     int hasInitial;
+    char *input;
 
     int natoms ;
     atom *atoms ;
@@ -45,6 +46,7 @@ typedef struct MCConfiguration {
 
     int useNei;
     double squared_rskin;
+    double squared_rskin_plus_cutoff;
 
     int equilib;
     int production;

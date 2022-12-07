@@ -14,7 +14,7 @@ int startsWith(const char *a, const char *b)
     return 0;
 }
 
-atom readAtomFromXYZ(char *line)
+atom readAtomFromXYZ(char *line, double sigma, int natoms)
 {
     atom a;
     vector u;
@@ -37,31 +37,32 @@ atom readAtomFromXYZ(char *line)
         // x, y ,z values
         if (n == 1)
         {
-            u.x = strtod(ptr, &extra);
+            u.x = strtod(ptr, &extra) / sigma;
         }
         if (n == 2)
         {
-            u.y = strtod(ptr, &extra);
+            u.y = strtod(ptr, &extra) / sigma;
         }
         if (n == 3)
         {
-            u.z = strtod(ptr, &extra);
+            u.z = strtod(ptr, &extra) / sigma;
         }
 
         ptr = strtok(NULL, delim);
         n++;
     }
     a.position = u;
+    a = atomInit(a.element, a.position, natoms);
     return a;
 }
 
-void readXYZ(char *url, mcconfig *config)
+void readXYZ(mcconfig *config)
 {
     FILE *file;
-    file = fopen(url, "r");
+    file = fopen(config->input, "r");
     if (NULL == file)
     {
-        printf("File '%s' can't be opened \n", url);
+        printf("File '%s' can't be opened \n", config->input);
         exit(0);
     }
     char *line = NULL;
@@ -90,7 +91,7 @@ void readXYZ(char *url, mcconfig *config)
         }
         else
         {
-            atoms[n] = readAtomFromXYZ(line);
+            atoms[n] = readAtomFromXYZ(line, config->sigma, n);
             n++;
         }
     }
@@ -112,6 +113,9 @@ void readInput(FILE *file, mcconfig *config)
 
     // Initialize hasInitial
     config->hasInitial = 0;
+
+    int hasBoxSize = 0;
+    double boxsize = 0;
 
     while ((read = getline(&line, &len, file)) != -1)
     {
@@ -150,6 +154,10 @@ void readInput(FILE *file, mcconfig *config)
                 config->useNei = 0;
             }
         }
+        if (startsWith(line, "\%sigma="))
+        {
+            config->sigma = strtod(line + 7, &extra);
+        }
         if (startsWith(line, "\%density="))
         {
             config->density = strtod(line + 9, &extra);
@@ -157,10 +165,6 @@ void readInput(FILE *file, mcconfig *config)
         if (startsWith(line, "\%cutoff="))
         {
             config->squared_cutoff = strtod(line + 8, &extra);
-            config->sigma = config->squared_cutoff / 3.0;
-            config->squared_rskin = config->squared_cutoff * 1.5;
-            config->squared_rskin *= config->squared_rskin;
-            config->squared_cutoff *= config->squared_cutoff;
         }
         if (startsWith(line, "\%equilibration="))
         {
@@ -181,11 +185,14 @@ void readInput(FILE *file, mcconfig *config)
         if (startsWith(line, "\%input="))
         {
             config->hasInitial = 1;
-            readXYZ(line + 7, config);
+            config->input = (char *)calloc(len, sizeof(char)); // Allocating memory for the input file name
+            strcpy(config->input, line + 7);
         }
         if (startsWith(line, "\%boxsize="))
         {
-            config->l = strtod(line + 9, &extra);
+            hasBoxSize = 1;
+            boxsize = strtod(line + 9, &extra);
+            config->l = boxsize;
         }
         if (startsWith(line, "\%grmax="))
         {
@@ -197,6 +204,26 @@ void readInput(FILE *file, mcconfig *config)
             config->gr_resolution = atoi(line + 5);
         }
     }
+
+    // Check initial structure
+    if (config->hasInitial == 1)
+    {
+        readXYZ(config);
+    }
+
+    if (hasBoxSize)
+    {
+        config->l = boxsize;
+    }
+
+    // Finalize cutoff setup
+    config->squared_rskin = config->step * 6; // 6 times was the fastest as the tests shown
+    config->squared_rskin_plus_cutoff = config->squared_cutoff + config->squared_rskin;
+
+    // Square all the variables
+    config->squared_rskin *= config->squared_rskin;
+    config->squared_rskin_plus_cutoff *= config->squared_rskin_plus_cutoff;
+    config->squared_cutoff *= config->squared_cutoff;
 }
 
 const char *get_filename_ext(const char *filename)
@@ -240,12 +267,12 @@ int fileReader(char *url, mcconfig *config)
     return 0;
 }
 
-void printXYZFile(atom *atoms, int natoms, char *name, FILE *file)
+void printXYZFile(atom *atoms, int natoms, char *name, double sigma, FILE *file)
 {
     fprintf(file, "%d\n", natoms);
     fprintf(file, "%s\n", name);
     for (int j = 0; j < natoms; j++)
     {
-        fprintf(file, "%s %f %f %f\n", atoms[j].name, atoms[j].position.x, atoms[j].position.y, atoms[j].position.z);
+        fprintf(file, "%s %f %f %f\n", atoms[j].name, atoms[j].position.x * sigma, atoms[j].position.y * sigma, atoms[j].position.z * sigma);
     }
 }

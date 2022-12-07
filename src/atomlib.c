@@ -34,9 +34,9 @@ char *getNameFromElement(int element)
     return "X"; // Element not supported
 }
 
-double shortestAtomDistance(atom a, atom b, double l, double squared_cutoff)
+double shortestAtomDistance(atom a, atom b, double l, double squared_cutoff, vector *dest)
 {
-    return shortestMIDistance(a.position, b.position, l, squared_cutoff);
+    return shortestMIDistance(a.position, b.position, l, squared_cutoff, dest);
 }
 
 vector MIVector(vector u, double l)
@@ -73,7 +73,7 @@ vector MIVector(vector u, double l)
     return mi_vec;
 }
 
-double shortestMIDistance(vector a, vector b, double l, double squared_cutoff)
+double shortestMIDistance(vector a, vector b, double l, double squared_cutoff, vector *dest)
 {
 
     vector dist_vect = substractVector(b, a);
@@ -87,6 +87,10 @@ double shortestMIDistance(vector a, vector b, double l, double squared_cutoff)
         return -1;
     }
 
+    if(dest)
+    {
+        *dest = v_rmij;
+    }
     return sqrt(rmij);
 }
 
@@ -179,7 +183,7 @@ void copyAtom(atom from, atom *to)
 {
     atom newAtom;
     newAtom.element = from.element;
-    newAtom.name = (char *)calloc(strlen(from.name)+1, sizeof(char)); // Allocating memory for the name
+    newAtom.name = (char *)calloc(strlen(from.name) + 1, sizeof(char)); // Allocating memory for the name
     strcpy(newAtom.name, from.name);
     newAtom.nei_capacity = from.nei_capacity;
     newAtom.nei_count = from.nei_count;
@@ -272,7 +276,7 @@ double singleLennardJones(atom *atoms, int natoms, int i, int m, double l, doubl
     {
         count++;
         atom b = atoms[k];
-        double dist = shortestAtomDistance(a, b, l, squared_cutoff);
+        double dist = shortestAtomDistance(a, b, l, squared_cutoff, NULL);
         if (dist > 0) // Skip because of cutoff (dist would be -1 // should not have bc of neighbour list)
         {
             double term = 1.0 / dist;
@@ -285,7 +289,7 @@ double singleLennardJones(atom *atoms, int natoms, int i, int m, double l, doubl
     return 4 * etot;
 };
 
-double singleNeiLennardJones(atom *atoms, int natoms, int i, double l, double squared_cutoff)
+double singleNeiLennardJones(atom *atoms, int i, double l, double squared_cutoff)
 {
     double etot = 0;
     atom a = atoms[i];
@@ -295,7 +299,7 @@ double singleNeiLennardJones(atom *atoms, int natoms, int i, double l, double sq
         count++;
         int m = a.nei[k];
         atom b = atoms[m];
-        double dist = shortestAtomDistance(a, b, l, squared_cutoff);
+        double dist = shortestAtomDistance(a, b, l, squared_cutoff, NULL);
         if (dist > 0) // Skip because of cutoff (dist would be -1 // should not have bc of neighbour list)
         {
             double term = 1.0 / dist;
@@ -336,7 +340,7 @@ void updateNeighbours(atom **atomlist, int natoms, double l, double squared_rski
     {
         for (int j = i + 1; j < natoms; j++)
         {
-            double dist = shortestAtomDistance((*atomlist)[i], (*atomlist)[j], l, squared_rskin);
+            double dist = shortestAtomDistance((*atomlist)[i], (*atomlist)[j], l, squared_rskin, NULL);
             if (dist > 0) // The rskin is already accounted in the distance function, (-1 if outside the rskin)
             {
                 addNeighbour(&(*atomlist)[i], j);
@@ -381,14 +385,14 @@ double f2(double r)
     return A * (B * r_term - 1) * exp(exp_term);
 }
 
-double V2(atom *atoms, int natoms, int m, double l, double cutoff_squared)
+double V2(atom *atoms, int m, double l, double cutoff_squared)
 {
     double toten = 0;
     atom a = atoms[m];
     for (int i = 0; i < a.nei_count; i++)
     {
         atom b = atoms[a.nei[i]];
-        double dist = shortestAtomDistance(a, b, l, cutoff_squared);
+        double dist = shortestAtomDistance(a, b, l, cutoff_squared, NULL);
         if (dist > 0)
         {
             toten += f2(dist);
@@ -411,101 +415,72 @@ double hfunc(double rij, double rik, double theta)
     return lamda * exp(exp_term) * cos_term;
 }
 
-double V3(atom *atoms, int natoms, int m, double l, double cutoff_squared)
+double V3(atom *atoms, int i, double l, double cutoff_squared)
 {
     double toten = 0;
-    atom a = atoms[m];
-    for (int i = 0; i < a.nei_count; i++)
+    atom a = atoms[i];
+    for (int j = 0; j < a.nei_count; j++)
     {
-        atom b = atoms[a.nei[i]];
-        for (int j = i + 1; j < a.nei_count; j++)
+        atom b = atoms[a.nei[j]];
+        vector rij;
+        double d_rij = shortestAtomDistance(a, b, l, cutoff_squared, &rij);
+        if (d_rij > 0)
         {
-            atom c = atoms[a.nei[j]];
-            vector pos_mi_b = MIVector(b.position, l);
-            vector pos_mi_c = MIVector(c.position, l);
-            vector rij = substractVector(pos_mi_b, a.position);
-            vector rik = substractVector(pos_mi_c, a.position);
-            double d_rij = sumSquaredComponents(rij);
-            double d_rik = sumSquaredComponents(rik);
-            if (d_rij > cutoff_squared || d_rik > cutoff_squared)
+            for (int k = j + 1; k < a.nei_count; k++)
             {
-                continue;
+                atom c = atoms[a.nei[k]];
+                vector rik;
+                double d_rik = shortestAtomDistance(a, c, l, cutoff_squared, &rik);
+                if (d_rik > 0)
+                {
+                    double angle = angleBetweenVectors(rij, rik);
+                    toten += hfunc(d_rij, d_rik, angle);
+                }
             }
-            double angle = angleBetweenVectors(rij, rik);
-            toten += hfunc(sqrt(d_rij), sqrt(d_rik), angle);
         }
     }
 
-    for (int i = 0; i < a.nei_count; i++)
+    for (int j = 0; j < a.nei_count; j++)
     {
-        atom b = atoms[a.nei[i]];
-        for (int j = i + 1; j < a.nei_count; j++)
+        atom b = atoms[a.nei[j]];
+        vector rji;
+        double d_rji = shortestAtomDistance(b, a, l, cutoff_squared, &rji);
+        if (d_rji > 0)
         {
-            atom c = atoms[a.nei[j]];
-            vector pos_mi_a = MIVector(a.position, l);
-            vector pos_mi_c = MIVector(c.position, l);
-            vector rji = substractVector(pos_mi_a, b.position);
-            vector rjk = substractVector(pos_mi_c, b.position);
-            double d_rji = sumSquaredComponents(rji);
-            double d_rjk = sumSquaredComponents(rjk);
-            if (d_rji > cutoff_squared || d_rjk > cutoff_squared)
+            for (int k = 0; k < b.nei_count; k++)
             {
-                continue;
+                if (b.nei[k] == i)
+                {
+                    continue;
+                }
+                atom c = atoms[b.nei[k]];
+                vector rjk;
+                double d_rjk = shortestAtomDistance(b, c, l, cutoff_squared, &rjk);
+                if (d_rjk > 0)
+                {
+                    double angle = angleBetweenVectors(rji, rjk);
+                    toten += hfunc(d_rji, d_rjk, angle);
+                }
             }
-            double angle = angleBetweenVectors(rji, rjk);
-            toten += hfunc(sqrt(d_rji), sqrt(d_rjk), angle);
         }
     }
 
-    
     return toten;
 }
 
-double stillingerModel(atom *atoms, int natoms, int m, double l, double cutoff_squared)
+double stillingerModel(atom *atoms, int m, double l, double cutoff_squared)
 {
-    return V2(atoms, natoms, m, l, cutoff_squared) + V3(atoms, natoms, m, l, cutoff_squared);
+    return V2(atoms, m, l, cutoff_squared) + V3(atoms, m, l, cutoff_squared);
 }
 
 double fullStillinger(atom *atoms, int natoms, double l, double cutoff_squared)
 {
-    double etot = 0;
-    for (int i = 0; i < natoms - 1; i++)
+    double toten = 0;
+    for (int i = 0; i < natoms; i++)
     {
-        for (int j = i + 1; j < natoms; j++)
-        {
-            double dist = shortestAtomDistance(atoms[i], atoms[j], l, cutoff_squared);
-            if (dist > 0)
-            {
-                etot += f2(dist);
-            }
-        }
+        toten += 0.5 * V2(atoms, i, l, cutoff_squared) + (1.0 / 3.0) * V3(atoms, i, l, cutoff_squared);
     }
-    for (int i = 0; i < natoms - 2; i++)
-    {
-        atom a = atoms[i];
-        for (int j = i + 1; j < natoms - 1; j++)
-        {
-            atom b = atoms[j];
-            for (int k = j + 1; k < natoms; k++)
-            {
-                atom c = atoms[k];
-                vector pos_mi_b = MIVector(b.position, l);
-                vector pos_mi_c = MIVector(c.position, l);
-                vector rij = substractVector(pos_mi_b, a.position);
-                vector rik = substractVector(pos_mi_c, a.position);
-                double d_rij = sumSquaredComponents(rij);
-                double d_rik = sumSquaredComponents(rik);
-                if (d_rij > cutoff_squared || d_rik > cutoff_squared)
-                {
-                    continue;
-                }
-                double angle = angleBetweenVectors(rij, rik);
-                etot += hfunc(sqrt(d_rij), sqrt(d_rik), angle);
-            }
-        }
-    }
-
-    return etot;
+    return toten;
 }
 
 void printAtom(atom a, int n)

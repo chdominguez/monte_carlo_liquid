@@ -77,7 +77,7 @@ int getRandomInt(int lower, int upper)
 
 double dotProduct(vector a, vector b)
 {
-    return a.x *b.x + a.y *b.y + a.z *b.z;
+    return a.x * b.x + a.y * b.y + a.z * b.z;
 }
 
 double angleBetweenVectors(vector a, vector b)
