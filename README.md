@@ -13,7 +13,7 @@ After compiling, a **bin** folder should appear with the compiled mc.exe executa
 
 `mc.exe <input>` 
 
-Where *input* is the configuration for the simulation. A sample input.mc file is provided in the root of this directory.
+Where *input* is the configuration for the simulation. Two sample lennard.mc and stillinger.mc files is provided in the root of this directory.
 
 # Theoretical background
 ## Monte Carlo Simulations
