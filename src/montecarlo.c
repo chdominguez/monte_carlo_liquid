@@ -2,9 +2,7 @@
 #include <string.h>
 #include "tools.h"
 #include <time.h>
-#ifdef _OPENMP
-#include <omp.h>
-#endif
+
 
 double monteCarloProbability(double change, double reducedT)
 {
@@ -124,14 +122,13 @@ void trialIteration(mcconfig *config, double *energy, int *changes, double squar
     double prevEnergy = potential(config->atoms, r, config->l, config->squared_cutoff);
 
     // Change the position of atom r and saving the old position
-    vector oldpos = moveRandomAtom(&config->atoms, r, config->l, config->step);
+    vector oldpos = moveRandomAtom(&config->atoms, r, config->l, config->stepSize);
 
     // Compute the new energy after moving atom r
     double postEnergy = potential(config->atoms, r, config->l, config->squared_cutoff);
 
     // The change of energy
     double change = postEnergy - prevEnergy;
-    // double change = fullpost - fullprev;
 
     // To control whether to save or not the new arrangement
     int printAtoms = 0;
@@ -156,7 +153,7 @@ void trialIteration(mcconfig *config, double *energy, int *changes, double squar
         (*energy) += change;
         (*changes)++;
         double moved = shortestMIDistance(config->atoms[r].nei_position, config->atoms[r].position, config->l, squared_max_dist, NULL);
-        if (moved == -1) // Update the neighbours if the distance moved by this atoms is superior to rskin / 2
+        if (moved == -1) // Update the neighbours if the distance moved by this atoms is superior to rskin / 2 (squared_max_dist)
         {
             updateNeighbours(&config->atoms, config->natoms, config->l, config->squared_rskin_plus_cutoff);
         }
@@ -197,13 +194,13 @@ void save_gr(char *name, grdist gr)
         exit(1);
     }
 
-    double volPI = atan(1.0) * 4;
+    double volPI = atan(1.0) * 4.0;
     for (int i = 0; i < gr.resolution; i++)
     {
         int ni = gr.n[i];
         double ri = i * gr.deltaR;
         double rterm = pow(ri + gr.deltaR, 3) - pow(ri, 3);
-        double result = (ni * 3) / (gr.naccum * (gr.natoms / 2) * 4 * volPI * rterm * gr.dens);
+        double result = (ni * 3.0) / (gr.naccum * (gr.natoms / 2.0) * 4.0 * volPI * rterm * gr.dens);
         fprintf(fptr, "%lf %lf\n", ri, result);
     }
 
@@ -254,8 +251,15 @@ void performMonteCarlo(mcconfig config)
     }
     else
     {
-        printf("Read structure from xyz\n");
+        printf("Read structure from '%s'\n", config.input);
     }
+
+    // Max atom movement before updating neighbours again rskin / 2, but squared.
+    double max_squared_dist = config.squared_rskin / 4.0;
+    printf("Cutoff: %f\n", sqrt(config.squared_cutoff));
+    printf("rskin: %f\n", sqrt(config.squared_rskin));
+    printf("Neighbours up to: %f\n", sqrt(config.squared_rskin_plus_cutoff));
+    printf("Update after: %f\n", sqrt(max_squared_dist));
 
     // Prepare the output file
     FILE *fptr;
@@ -281,8 +285,6 @@ void performMonteCarlo(mcconfig config)
     printf("============Iterations============\n");
     printf("Equilibrium: %d\nProduction: %d\nTotal: %d\n", equilib_it, prod_it, total_it);
 
-    // Max atom movement before updating neighbours again rskin / 2, but squared.
-    double max_squared_dist = config.squared_rskin / 4.0;
     updateNeighbours(&config.atoms, config.natoms, config.l, config.squared_rskin_plus_cutoff);
 
     double energy = 0;    // Initialize energy variable
@@ -338,13 +340,16 @@ void performMonteCarlo(mcconfig config)
             printf("\rProduction: %.1f%% ", completed);
             fflush(stdout);
             update_gr(&gr, config);
-            printXYZFile(config.atoms, config.natoms, config.name, config.sigma, fptr);
+            // Uncoment to save a xyz file with a snapshot of each sweep
+            //printXYZFile(config.atoms, config.natoms, config.name, config.sigma, fptr);
         }
     }
 
     printf("\n=============Results==============\n");
     printf("Accepted %.2lf%% of the changes\n", ((1.0 * changes) / total_it) * 100);
     printf("Final energy: %lf\n", energy);
+
+    updateNeighbours(&config.atoms, config.natoms, config.l, config.squared_rskin_plus_cutoff);
 
     // Close the output file
     fclose(fptr);
@@ -371,7 +376,7 @@ mcconfig initMCConfig()
     config.sigma = 1;
     config.squared_cutoff = 1;
     config.squared_rskin_plus_cutoff = sqrt(2);
-    config.step = 1;
+    config.stepSize = 1;
     config.useNei = 0;
     config.squared_rskin = 1;
     config.equilib = 0;

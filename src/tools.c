@@ -111,9 +111,6 @@ void readInput(FILE *file, mcconfig *config)
 
     char *extra; // Nedded for the strod function
 
-    // Initialize hasInitial
-    config->hasInitial = 0;
-
     int hasBoxSize = 0;
     double boxsize = 0;
 
@@ -142,18 +139,6 @@ void readInput(FILE *file, mcconfig *config)
                 printf("Unsupported type. Allowed types are 'lennard' and 'stillinger'\n");
             }
         }
-        if (startsWith(line, "\%neighbours="))
-        {
-            char *nei = line + 12;
-            if (strcmp(nei, "true") == 0)
-            {
-                config->useNei = 1;
-            }
-            else
-            {
-                config->useNei = 0;
-            }
-        }
         if (startsWith(line, "\%sigma="))
         {
             config->sigma = strtod(line + 7, &extra);
@@ -164,6 +149,7 @@ void readInput(FILE *file, mcconfig *config)
         }
         if (startsWith(line, "\%cutoff="))
         {
+            // Not squaring until later, the regular value is needed to compute other variables
             config->squared_cutoff = strtod(line + 8, &extra);
         }
         if (startsWith(line, "\%equilibration="))
@@ -176,7 +162,7 @@ void readInput(FILE *file, mcconfig *config)
         }
         if (startsWith(line, "\%stepsize="))
         {
-            config->step = strtod(line + 10, &extra);
+            config->stepSize = strtod(line + 10, &extra);
         }
         if (startsWith(line, "\%temp="))
         {
@@ -196,6 +182,7 @@ void readInput(FILE *file, mcconfig *config)
         }
         if (startsWith(line, "\%grmax="))
         {
+            // Not squaring until later, the regular value is needed to compute other variables
             config->gr_rmax_squared = strtod(line + 7, &extra);
             config->gr_rmax_squared *= config->gr_rmax_squared;
         }
@@ -205,7 +192,7 @@ void readInput(FILE *file, mcconfig *config)
         }
     }
 
-    // Check initial structure
+    // Check and read initial structure if specified
     if (config->hasInitial == 1)
     {
         readXYZ(config);
@@ -217,7 +204,7 @@ void readInput(FILE *file, mcconfig *config)
     }
 
     // Finalize cutoff setup
-    config->squared_rskin = config->step * 6; // 6 times was the fastest as the tests shown
+    config->squared_rskin = config->stepSize * 6; // 6 times was the fastest as the tests shown
     config->squared_rskin_plus_cutoff = config->squared_cutoff + config->squared_rskin;
 
     // Square all the variables
@@ -242,16 +229,12 @@ int fileReader(char *url, mcconfig *config)
     file = fopen(url, "r");
     if (NULL == file)
     {
-        printf("file can't be opened \n");
+        printf("%s can't be opened\n", url);
         return 1;
     }
 
     extension = get_filename_ext(url);
 
-    // if (strcmp(extension, "xyz") == 0) {
-    //     printf("Reading xyz file:\n");
-    //     readXYZ(file, config);
-    // }
     if (strcmp(extension, "mc") == 0)
     {
         printf("Reading montecarlo file...\n\n");
@@ -259,7 +242,7 @@ int fileReader(char *url, mcconfig *config)
     }
     else
     {
-        printf("Incompatible file\n");
+        printf("Unrecognized file\n");
         return 1;
     }
 

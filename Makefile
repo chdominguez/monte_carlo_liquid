@@ -7,7 +7,7 @@ SRC := $(wildcard $(SRC_DIR)/*.c)
 OBJ := $(SRC:$(SRC_DIR)/%.c=$(OBJ_DIR)/%.o)
 
 CC = gcc
-CPPFLAGS := -Iinclude -MMD -MP
+CPPFLAGS := -Iinclude -I/usr/local/opt/libomp/include -MMD -MP
 CFLAGS   := -Wall
 
 $(EXE): $(OBJ) | $(BIN_DIR)

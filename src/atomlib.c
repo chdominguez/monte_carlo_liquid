@@ -223,7 +223,7 @@ vector moveRandomAtom(atom **atoms, int r, double l, double stepSize)
     (*atoms)[r].position.z += getRandomDouble(-1, 1) * stepSize;
 
     // X
-    if ((*atoms)[r].position.x > l)
+    if ((*atoms)[r].position.x >= l)
     {
         (*atoms)[r].position.x -= l;
     }
@@ -233,7 +233,7 @@ vector moveRandomAtom(atom **atoms, int r, double l, double stepSize)
     }
 
     // Y
-    if ((*atoms)[r].position.y > l)
+    if ((*atoms)[r].position.y >= l)
     {
         (*atoms)[r].position.y -= l;
     }
@@ -243,7 +243,7 @@ vector moveRandomAtom(atom **atoms, int r, double l, double stepSize)
     }
 
     // Z
-    if ((*atoms)[r].position.z > l)
+    if ((*atoms)[r].position.z >= l)
     {
         (*atoms)[r].position.z -= l;
     }
@@ -261,32 +261,10 @@ double fullLennardJones(atom *atoms, int natoms, double l, double squared_cutoff
     int iter = 0;
     for (int i = 0; i < natoms - 1; i++) // The last atom will have been counted by all the other ones
     {
-        etot += singleLennardJones(atoms, natoms, i, i + 1, l, squared_cutoff);
+        etot += singleNeiLennardJones(atoms, i, l, squared_cutoff);
         iter++;
     }
     return etot;
-};
-
-double singleLennardJones(atom *atoms, int natoms, int i, int m, double l, double squared_cutoff)
-{
-    double etot = 0;
-    atom a = atoms[i];
-    int count = 0;
-    for (int k = m; k < natoms; k++)
-    {
-        count++;
-        atom b = atoms[k];
-        double dist = shortestAtomDistance(a, b, l, squared_cutoff, NULL);
-        if (dist > 0) // Skip because of cutoff (dist would be -1 // should not have bc of neighbour list)
-        {
-            double term = 1.0 / dist;
-            double fterm = pow(term, 12);
-            double sterm = pow(term, 6);
-            double enow = fterm - sterm;
-            etot += enow;
-        }
-    }
-    return 4 * etot;
 };
 
 double singleNeiLennardJones(atom *atoms, int i, double l, double squared_cutoff)
@@ -323,7 +301,7 @@ void addNeighbour(atom *a, int neighbour)
     a->nei[a->nei_count - 1] = neighbour;
 }
 
-void updateNeighbours(atom **atomlist, int natoms, double l, double squared_rskin)
+void updateNeighbours(atom **atomlist, int natoms, double l, double squared_rskin_plus_cutoff)
 {
     // Empty the current list
     for (int i = 0; i < natoms; i++)
@@ -340,7 +318,7 @@ void updateNeighbours(atom **atomlist, int natoms, double l, double squared_rski
     {
         for (int j = i + 1; j < natoms; j++)
         {
-            double dist = shortestAtomDistance((*atomlist)[i], (*atomlist)[j], l, squared_rskin, NULL);
+            double dist = shortestAtomDistance((*atomlist)[i], (*atomlist)[j], l, squared_rskin_plus_cutoff, NULL);
             if (dist > 0) // The rskin is already accounted in the distance function, (-1 if outside the rskin)
             {
                 addNeighbour(&(*atomlist)[i], j);
@@ -380,9 +358,9 @@ double f2(double r)
     B = 0.6022245584;
     aa = 1.80;
 
-    double r_term = 1.0 / pow(r, 4);
+    double r_term = B / pow(r, 4);
     double exp_term = 1.0 / (r - aa);
-    return A * (B * r_term - 1) * exp(exp_term);
+    return A * (r_term - 1) * exp(exp_term);
 }
 
 double V2(atom *atoms, int m, double l, double cutoff_squared)
@@ -407,7 +385,7 @@ double hfunc(double rij, double rik, double theta)
     double aa, lamda, gamma;
     aa = 1.80;
     lamda = 21.0;
-    gamma = 1.20;
+    gamma = 1.2;
 
     double exp_term = (gamma / (rij - aa)) + (gamma / (rik - aa));
     double cos_term = pow(cos(theta) + (1.0 / 3.0), 2);
@@ -467,6 +445,7 @@ double V3(atom *atoms, int i, double l, double cutoff_squared)
 
     return toten;
 }
+
 
 double stillingerModel(atom *atoms, int m, double l, double cutoff_squared)
 {

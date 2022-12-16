@@ -42,7 +42,7 @@ typedef struct MCConfiguration {
 
     double sigma;
     double squared_cutoff;
-    double step;
+    double stepSize;
 
     int useNei;
     double squared_rskin;

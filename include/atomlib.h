@@ -205,3 +205,5 @@ void printAtomList(atom *list, int size);
 
 double V3(atom *atoms, int i, double l, double cutoff_squared);
 double V2(atom *atoms, int m, double l, double cutoff_squared);
+
+double nonei_stillingerModel(atom *atoms, int natoms, int m, double l, double cutoff_squared);
